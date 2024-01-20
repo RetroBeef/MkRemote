@@ -23,11 +23,6 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 static esp_bd_addr_t rnd_addr = { 0x51 | 0b11000000, 0x02, 0x8a, 0x34, 0x79, 0xef };
 
 uint8_t commandDataHello[] = {170, 3, 40, 128, 128, 0, 129,  85};
-uint8_t commandDataIdle[]  = {102, 3, 40, 128, 128, 0, 128, 153};
-uint8_t commandDataFwd[]   = {102, 3, 40, 128, 255, 0, 255, 153};
-uint8_t commandDataBwd[]   = {102, 3, 40, 128,   1, 0, 255, 153};
-uint8_t commandDataLeft[]  = {102, 3, 40,   1, 128, 0, 255, 153};
-uint8_t commandDataRight[] = {102, 3, 40, 255, 128, 0,   1, 153};
 
 static esp_ble_adv_params_t ble_adv_params = {0};
 static esp_ble_adv_data_t ble_adv_data = {0};
@@ -71,6 +66,11 @@ void advertiseMkData(uint8_t* commandData, size_t commandDataSize){
   }
 }
 
+void setMotors(uint8_t a, uint8_t b, uint8_t c, uint8_t d){
+  uint8_t commandData[]  = {102, 3, 40, a, b, c, d, 153};
+  advertiseMkData(commandData, sizeof(commandData));
+}
+
 void setup() {
   Serial.begin(115200);
   
@@ -108,33 +108,63 @@ void setup() {
   ESP_LOGI(LOG_TAG, "application initialized");
 }
 
+size_t parseMotorData(String data, uint8_t* dataArray) {
+  size_t count = 0;
+  char* token = strtok((char*)data.c_str(), ",");
+  
+  while (token != NULL && count < 4) {
+    dataArray[count] = atoi(token);
+    token = strtok(NULL, ",");
+    count++;
+  }
+  
+  return count;
+}
+
 void loop() {
   if(Serial.available()){
     uint8_t c = Serial.read();
     switch(c){
+      case 'm':{
+        String incomingData = Serial.readStringUntil('\n');
+        uint8_t motorData[4];
+        size_t motorDataCount = parseMotorData(incomingData, motorData);
+        if (motorDataCount == 4) {
+          setMotors(motorData[0],motorData[1],motorData[2],motorData[3]);
+          Serial.println(incomingData);
+        }
+      }break;
       case 'i':{
         Serial.println("init");
         advertiseMkData(commandDataHello, sizeof(commandDataHello));
       }break;
       case ' ':{
         Serial.println("stop");
-        advertiseMkData(commandDataIdle, sizeof(commandDataIdle));
+        setMotors(128, 128, 0, 128);
       }break;
       case 'w':{
         Serial.println("fwd");
-        advertiseMkData(commandDataFwd, sizeof(commandDataFwd));
+        setMotors(128, 255, 0, 255);
       }break;
       case 'a':{
         Serial.println("left");
-        advertiseMkData(commandDataLeft, sizeof(commandDataLeft));
+        setMotors(1, 128, 0, 255);
       }break;
       case 's':{
         Serial.println("back");
-        advertiseMkData(commandDataBwd, sizeof(commandDataBwd));
+        setMotors(128, 1, 0, 255);
       }break;
       case 'd':{
         Serial.println("right");
-        advertiseMkData(commandDataRight, sizeof(commandDataRight));
+        setMotors(255, 128, 0, 1);
+      }break;
+      case 'q':{
+        Serial.println("only a ccw");
+        setMotors(1, 1, 0, 128);
+      }break;
+      case 'e':{
+        Serial.println("only a cw");
+        setMotors(1, 255, 0, 128);
       }break;
     }
   }
